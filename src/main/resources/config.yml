@@ -1,13 +1,14 @@
-# ANACODE X ANTYLOGOUT - Konfiguracja
+# ANACODE X ANTYLOGOUT - Konfiguracja v1.1.0
 
 settings:
   combat-time: 30
   kill-on-logout: true
   ender-pearl-triggers-combat: true
   region-wall-distance: 10
-  wall-width: 15
-  wall-height: 15
+  wall-width: 12
+  wall-height: 10
   worldguard-protection: true
+  block-enderchest: true
 
 messages:
   prefix: "&8[&4ANACODE&8] &7"
@@ -16,17 +17,36 @@ messages:
   combat-enter: "&7Wszedles w &4tryb walki&7!"
   combat-leave: "&7Wyszedles z &atrybu walki&7!"
   region-blocked: "&7Nie mozesz wejsc na ten &4region &7podczas walki!"
-  logout-broadcast: "&4%player% &7wylogowal sie podczas walki i &czginal&7!"
+  enderchest-blocked: "&7Nie mozesz otworzyc &4enderchesta &7podczas walki!"
+  
+  # Wiadomosci smierci
+  death-killed: "&7Gracz &f%killer% &7zabil &f%killed%&7."
+  death-combatlog: "&7Gracz &f%killed% &cwylogowal sie podczas &4walki&7!"
+  death-suicide: "&7Gracz &f%killed% &7popelnil &4samobojstwo&7!"
+  
+  # ActionBar dla zabojcy
+  kill-actionbar: "&7Zabiles gracza: &f%killed%&7!"
+  
+  # Statystyki
+  stats-header: "&8&m─────────&8[&4 Statystyki &8]&m─────────"
+  stats-player: "&7Gracz: &f%player%"
+  stats-kills: "&7Zabojstwa: &c%kills%"
+  stats-deaths: "&7Smierci: &c%deaths%"
+  stats-kdr: "&7K/D: &e%kdr%"
+  stats-footer: "&8&m──────────────────────────────"
 
 allowed-commands:
   - "msg"
   - "r"
   - "reply"
   - "helpop"
+  - "report"
   - "zglos"
 
 blocked-regions:
   - "spawn"
+  - "endspawn"
+  - "netherspawn"
 
 disabled-worlds:
   - "world_lobby"
