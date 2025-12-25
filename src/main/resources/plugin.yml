@@ -1,10 +1,10 @@
 name: ANACODE-X-ANTYLOGOUT
-version: '1.0.0'
+version: '1.1.0'
 main: pl.anacode.antylogout.AnacodeAntylogout
 api-version: '1.20'
-authors: [v3xa]
+authors: [ANACODE]
 description: Zaawansowany system AntyLogout
-softdepend: [WorldGuard]
+softdepend: [WorldGuard, PlaceholderAPI]
 
 permissions:
   anacode.antylogout.bypass:
@@ -19,3 +19,6 @@ commands:
     description: Glowna komenda pluginu ANACODE X ANTYLOGOUT
     aliases: [al, combatlog, combat]
     permission: anacode.antylogout.admin
+  stats:
+    description: Sprawdz statystyki gracza
+    aliases: [statystyki]
