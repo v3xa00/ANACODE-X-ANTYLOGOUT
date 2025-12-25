@@ -1,0 +1,21 @@
+name: ANACODE-X-ANTYLOGOUT
+version: '1.0.0'
+main: pl.anacode.antylogout.AnacodeAntylogout
+api-version: '1.20'
+authors: [v3xa]
+description: Zaawansowany system AntyLogout
+softdepend: [WorldGuard]
+
+permissions:
+  anacode.antylogout.bypass:
+    description: Pozwala ominac system antylogout
+    default: op
+  anacode.antylogout.admin:
+    description: Dostep do komend administracyjnych
+    default: op
+
+commands:
+  antylogout:
+    description: Glowna komenda pluginu ANACODE X ANTYLOGOUT
+    aliases: [al, combatlog, combat]
+    permission: anacode.antylogout.admin
