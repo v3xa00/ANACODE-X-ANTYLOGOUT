@@ -1,0 +1,33 @@
+# ANACODE X ANTYLOGOUT - Konfiguracja
+
+settings:
+  combat-time: 30
+  kill-on-logout: true
+  ender-pearl-triggers-combat: true
+  region-wall-distance: 10
+  wall-width: 15
+  wall-height: 15
+  worldguard-protection: true
+
+messages:
+  prefix: "&8[&4ANACODE&8] &7"
+  actionbar: "&7Jestes podczas walki jeszcze &4%time_left%s"
+  command-blocked: "&7Jestes podczas walki nie mozesz teraz tego &4uzyc&7!"
+  combat-enter: "&7Wszedles w &4tryb walki&7!"
+  combat-leave: "&7Wyszedles z &atrybu walki&7!"
+  region-blocked: "&7Nie mozesz wejsc na ten &4region &7podczas walki!"
+  logout-broadcast: "&4%player% &7wylogowal sie podczas walki i &czginal&7!"
+
+allowed-commands:
+  - "msg"
+  - "r"
+  - "reply"
+  - "helpop"
+  - "zglos"
+
+blocked-regions:
+  - "spawn"
+
+disabled-worlds:
+  - "world_lobby"
+  - "world_hub"
