@@ -35,14 +35,36 @@ public class QuitListener implements Listener {
 
         if (!plugin.getConfig().getBoolean("settings.kill-on-logout", true)) return;
 
-        player.setHealth(0);
+        // Pobierz ostatniego atakujacego
+        Player killer = plugin.getCombatManager().getLastAttacker(player);
 
-        String broadcastMessage = plugin.getConfig().getString("messages.logout-broadcast",
-            "&4%player% &7wylogowal sie podczas walki i &czginal&7!");
-        broadcastMessage = broadcastMessage.replace("%player%", player.getName());
+        // Dodaj smierc graczowi
+        plugin.getStatsManager().addDeath(player.getUniqueId());
+
+        // Broadcast wiadomosc o combat logu
+        String deathMessage = plugin.getConfig().getString("messages.death-combatlog",
+            "&7Gracz &f%killed% &cwylogowal sie podczas &4walki&7!");
+        deathMessage = deathMessage.replace("%killed%", player.getName());
 
         for (Player online : Bukkit.getOnlinePlayers()) {
-            MessageUtil.sendMessage(online, broadcastMessage);
+            MessageUtil.sendRawMessage(online, deathMessage);
         }
+
+        // Jesli byl atakujacy - daj mu zabojstwo
+        if (killer != null && killer.isOnline()) {
+            plugin.getStatsManager().addKill(killer.getUniqueId());
+            
+            // ActionBar dla zabojcy
+            String killActionbar = plugin.getConfig().getString("messages.kill-actionbar",
+                "&7Zabiles gracza: &f%killed%&7!");
+            killActionbar = killActionbar.replace("%killed%", player.getName());
+            MessageUtil.sendActionBar(killer, killActionbar);
+        }
+
+        // Zabij gracza
+        player.setHealth(0);
+
+        // Usun z walki
+        plugin.getCombatManager().removeFromCombatSilent(player);
     }
 }
