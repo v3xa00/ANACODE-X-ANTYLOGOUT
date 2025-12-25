@@ -5,7 +5,12 @@ import org.bukkit.plugin.java.JavaPlugin;
 import pl.anacode.antylogout.command.AntylogoutCommand;
 import pl.anacode.antylogout.command.StatsCommand;
 import pl.anacode.antylogout.hook.PlaceholderHook;
-import pl.anacode.antylogout.listener.*;
+import pl.anacode.antylogout.listener.CombatListener;
+import pl.anacode.antylogout.listener.CommandListener;
+import pl.anacode.antylogout.listener.DeathListener;
+import pl.anacode.antylogout.listener.EnderchestListener;
+import pl.anacode.antylogout.listener.MoveListener;
+import pl.anacode.antylogout.listener.QuitListener;
 import pl.anacode.antylogout.manager.CombatManager;
 import pl.anacode.antylogout.manager.RegionManager;
 import pl.anacode.antylogout.manager.StatsManager;
@@ -36,7 +41,6 @@ public class AnacodeAntylogout extends JavaPlugin {
 
         saveDefaultConfig();
 
-        // Sprawdz WorldGuard
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null) {
             worldGuardEnabled = true;
             getLogger().info("WorldGuard wykryty! Ochrona regionow wlaczona.");
@@ -44,7 +48,6 @@ public class AnacodeAntylogout extends JavaPlugin {
             getLogger().warning("WorldGuard nie znaleziony! Ochrona regionow wylaczona.");
         }
 
-        // Sprawdz PlaceholderAPI
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
             placeholderAPIEnabled = true;
             new PlaceholderHook(this).register();
@@ -53,7 +56,6 @@ public class AnacodeAntylogout extends JavaPlugin {
             getLogger().warning("PlaceholderAPI nie znaleziony! Placeholdery wylaczone.");
         }
 
-        // Inicjalizuj managery
         statsManager = new StatsManager(this);
         combatManager = new CombatManager(this);
         wallManager = new WallManager(this);
@@ -66,7 +68,6 @@ public class AnacodeAntylogout extends JavaPlugin {
 
         new CombatTask(this).runTaskTimer(this, 0L, 20L);
 
-        // Rejestruj komendy
         getCommand("antylogout").setExecutor(new AntylogoutCommand(this));
         getCommand("stats").setExecutor(new StatsCommand(this));
 
@@ -126,4 +127,4 @@ public class AnacodeAntylogout extends JavaPlugin {
     public boolean isPlaceholderAPIEnabled() {
         return placeholderAPIEnabled;
     }
-}s
+}
