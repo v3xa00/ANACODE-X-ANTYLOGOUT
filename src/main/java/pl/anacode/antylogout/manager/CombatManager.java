@@ -12,11 +12,13 @@ public class CombatManager {
 
     private final AnacodeAntylogout plugin;
     private final Map<UUID, Long> combatPlayers;
+    private final Map<UUID, UUID> lastAttacker;
     private final int combatTime;
 
     public CombatManager(AnacodeAntylogout plugin) {
         this.plugin = plugin;
         this.combatPlayers = new ConcurrentHashMap<>();
+        this.lastAttacker = new ConcurrentHashMap<>();
         this.combatTime = plugin.getConfig().getInt("settings.combat-time", 30);
     }
 
@@ -37,6 +39,31 @@ public class CombatManager {
     public void tagBoth(Player attacker, Player victim) {
         tagPlayer(attacker);
         tagPlayer(victim);
+        
+        // Zapisz ostatniego atakujacego dla ofiary
+        if (attacker != null && victim != null && !attacker.equals(victim)) {
+            lastAttacker.put(victim.getUniqueId(), attacker.getUniqueId());
+            lastAttacker.put(attacker.getUniqueId(), victim.getUniqueId());
+        }
+    }
+
+    public void setLastAttacker(Player victim, Player attacker) {
+        if (victim != null && attacker != null) {
+            lastAttacker.put(victim.getUniqueId(), attacker.getUniqueId());
+        }
+    }
+
+    public Player getLastAttacker(Player victim) {
+        if (victim == null) return null;
+        UUID attackerUUID = lastAttacker.get(victim.getUniqueId());
+        if (attackerUUID == null) return null;
+        return Bukkit.getPlayer(attackerUUID);
+    }
+
+    public void clearLastAttacker(Player player) {
+        if (player != null) {
+            lastAttacker.remove(player.getUniqueId());
+        }
     }
 
     public boolean isInCombat(Player player) {
@@ -69,6 +96,14 @@ public class CombatManager {
             MessageUtil.sendMessage(player, message);
             plugin.getWallManager().removeWall(player);
         }
+        clearLastAttacker(player);
+    }
+
+    public void removeFromCombatSilent(Player player) {
+        if (player == null) return;
+        combatPlayers.remove(player.getUniqueId());
+        plugin.getWallManager().removeWall(player);
+        clearLastAttacker(player);
     }
 
     public Set<UUID> getCombatPlayers() {
@@ -77,6 +112,7 @@ public class CombatManager {
 
     public void clearAll() {
         combatPlayers.clear();
+        lastAttacker.clear();
     }
 
     public boolean isWorldDisabled(String worldName) {
@@ -98,6 +134,7 @@ public class CombatManager {
                     String message = plugin.getConfig().getString("messages.combat-leave", "&7Wyszedles z &atrybu walki&7!");
                     MessageUtil.sendMessage(player, message);
                     plugin.getWallManager().removeWall(player);
+                    clearLastAttacker(player);
                 }
             }
         }
