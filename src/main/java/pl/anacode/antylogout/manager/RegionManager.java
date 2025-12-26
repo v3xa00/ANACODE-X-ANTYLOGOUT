@@ -49,6 +49,59 @@ public class RegionManager {
         return false;
     }
 
+    /**
+     * Oblicza kierunek wypychania gracza z regionu
+     */
+    public Vector getDirectionOutOfRegion(Player player) {
+        Location playerLoc = player.getLocation();
+        World world = player.getWorld();
+
+        RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
+        com.sk89q.worldguard.protection.managers.RegionManager regions =
+            container.get(BukkitAdapter.adapt(world));
+
+        if (regions == null) return null;
+
+        for (String regionName : blockedRegions) {
+            ProtectedRegion region = regions.getRegion(regionName.toLowerCase());
+            if (region == null) {
+                region = regions.getRegion(regionName);
+                if (region == null) continue;
+            }
+
+            BlockVector3 min = region.getMinimumPoint();
+            BlockVector3 max = region.getMaximumPoint();
+
+            double px = playerLoc.getX();
+            double pz = playerLoc.getZ();
+
+            // Sprawdz czy gracz jest w tym regionie
+            if (px >= min.getX() && px <= max.getX() && pz >= min.getZ() && pz <= max.getZ()) {
+                // Oblicz odleglosc do kazdej sciany
+                double distToMinX = px - min.getX();
+                double distToMaxX = max.getX() - px;
+                double distToMinZ = pz - min.getZ();
+                double distToMaxZ = max.getZ() - pz;
+
+                // Znajdz najblizsza sciane
+                double minDist = Math.min(Math.min(distToMinX, distToMaxX), Math.min(distToMinZ, distToMaxZ));
+
+                // Zwroc kierunek do najblizszej sciany
+                if (minDist == distToMinX) {
+                    return new Vector(-1, 0, 0); // Wypchnij na zachod (X-)
+                } else if (minDist == distToMaxX) {
+                    return new Vector(1, 0, 0);  // Wypchnij na wschod (X+)
+                } else if (minDist == distToMinZ) {
+                    return new Vector(0, 0, -1); // Wypchnij na polnoc (Z-)
+                } else {
+                    return new Vector(0, 0, 1);  // Wypchnij na poludnie (Z+)
+                }
+            }
+        }
+
+        return null;
+    }
+
     public RegionBorderInfo getNearestBlockedRegionBorder(Player player) {
         Location playerLoc = player.getLocation();
         World world = player.getWorld();
