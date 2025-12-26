@@ -10,6 +10,7 @@ import pl.anacode.antylogout.listener.CommandListener;
 import pl.anacode.antylogout.listener.DeathListener;
 import pl.anacode.antylogout.listener.EnderchestListener;
 import pl.anacode.antylogout.listener.MoveListener;
+import pl.anacode.antylogout.listener.PearlListener;
 import pl.anacode.antylogout.listener.QuitListener;
 import pl.anacode.antylogout.manager.CombatManager;
 import pl.anacode.antylogout.manager.RegionManager;
@@ -94,6 +95,7 @@ public class AnacodeAntylogout extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new QuitListener(this), this);
         Bukkit.getPluginManager().registerEvents(new DeathListener(this), this);
         Bukkit.getPluginManager().registerEvents(new EnderchestListener(this), this);
+        Bukkit.getPluginManager().registerEvents(new PearlListener(this), this);
 
         if (worldGuardEnabled && getConfig().getBoolean("settings.worldguard-protection", true)) {
             Bukkit.getPluginManager().registerEvents(new MoveListener(this), this);
