@@ -1,263 +1,363 @@
 package pl.anacode.antylogout.manager;
 
+import com.sk89q.worldedit.bukkit.BukkitAdapter;
+import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldguard.WorldGuard;
+import com.sk89q.worldguard.protection.managers.RegionManager;
+import com.sk89q.worldguard.protection.regions.ProtectedRegion;
+import com.sk89q.worldguard.protection.regions.RegionContainer;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.bukkit.util.Vector;
 import pl.anacode.antylogout.AnacodeAntylogout;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class WallManager {
 
     private final AnacodeAntylogout plugin;
-    private final Map<UUID, WallData> playerWalls;
-    private final int wallWidth;
-    private final int wallHeight;
+    private final Map<UUID, Set<Location>> shownWalls = new HashMap<>();
 
     public WallManager(AnacodeAntylogout plugin) {
         this.plugin = plugin;
-        this.playerWalls = new ConcurrentHashMap<>();
-        this.wallWidth = plugin.getConfig().getInt("settings.wall-width", 12);
-        this.wallHeight = plugin.getConfig().getInt("settings.wall-height", 10);
     }
 
-    private static class WallData {
-        Set<Location> blocks = new HashSet<>();
-        int wallFixedCoord;
-        int lastCenterCoord;
-        boolean wallAlongZ;
-        int baseY;
+    // Kierunek ściany, od której liczymy pozycję startową
+    private enum WallSide {
+        NORTH, // z = minZ
+        SOUTH, // z = maxZ
+        EAST,  // x = maxX
+        WEST   // x = minX
     }
 
-    public void updateWall(Player player, Location borderLocation, Vector direction) {
-        if (player == null || !player.isOnline()) return;
+    /**
+     * Wywoływane w tasku co kilka ticków
+     */
+    public void updateWallForPlayer(Player player) {
+        if (!plugin.isWorldGuardEnabled()) return;
+        if (!plugin.getCombatManager().isInCombat(player)) {
+            removeWall(player);
+            return;
+        }
 
-        boolean wallAlongZ = Math.abs(direction.getX()) > Math.abs(direction.getZ());
+        Location loc = player.getLocation();
+        NearestWallResult nearest = findNearestWall(player, loc);
+        if (nearest == null) {
+            removeWall(player);
+            return;
+        }
 
-        int wallFixedCoord;
-        int playerVarCoord;
-
-        if (wallAlongZ) {
-            wallFixedCoord = borderLocation.getBlockX();
-            playerVarCoord = player.getLocation().getBlockZ();
+        int maxDistance = plugin.getConfigManager().getWallDistance();
+        if (nearest.distance <= maxDistance && nearest.distance > 0) {
+            showWallAlongPerimeter(player, loc, nearest);
         } else {
-            wallFixedCoord = borderLocation.getBlockZ();
-            playerVarCoord = player.getLocation().getBlockX();
+            removeWall(player);
         }
-
-        int baseY = player.getLocation().getBlockY() - 1;
-
-        WallData wallData = playerWalls.get(player.getUniqueId());
-
-        if (wallData == null ||
-            wallData.wallAlongZ != wallAlongZ ||
-            wallData.wallFixedCoord != wallFixedCoord) {
-
-            createNewWall(player, wallFixedCoord, playerVarCoord, baseY, wallAlongZ);
-            return;
-        }
-
-        int movement = playerVarCoord - wallData.lastCenterCoord;
-
-        if (movement == 0) {
-            if (baseY != wallData.baseY) {
-                createNewWall(player, wallFixedCoord, playerVarCoord, baseY, wallAlongZ);
-            }
-            return;
-        }
-
-        shiftWall(player, wallData, movement, playerVarCoord, baseY);
     }
 
-    private void createNewWall(Player player, int wallFixedCoord, int centerCoord,
-                                int baseY, boolean wallAlongZ) {
+    /**
+     * Znajduje najbliższą ścianę regionu zablokowanego (N/S/E/W)
+     * Zwraca też bounding box regionu (minX, maxX, minZ, maxZ)
+     */
+    private NearestWallResult findNearestWall(Player player, Location loc) {
+        World world = player.getWorld();
+        List<String> blockedRegions = plugin.getConfigManager().getBlockedRegions();
+
+        RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
+        RegionManager regionManager = container.get(BukkitAdapter.adapt(world));
+        if (regionManager == null) return null;
+
+        int px = loc.getBlockX();
+        int pz = loc.getBlockZ();
+
+        NearestWallResult best = null;
+        double bestDist = Double.MAX_VALUE;
+
+        for (String id : blockedRegions) {
+            ProtectedRegion region = regionManager.getRegion(id);
+            if (region == null) continue;
+
+            BlockVector3 min = region.getMinimumPoint();
+            BlockVector3 max = region.getMaximumPoint();
+
+            int minX = min.getBlockX();
+            int maxX = max.getBlockX();
+            int minZ = min.getBlockZ();
+            int maxZ = max.getBlockZ();
+
+            // jeśli gracz jest w środku regionu – nie pokazujemy ściany
+            if (px >= minX && px <= maxX && pz >= minZ && pz <= maxZ) {
+                continue;
+            }
+
+            // North (gracz przed północną ścianą -> z < minZ)
+            if (pz < minZ) {
+                double dist = minZ - pz;
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = new NearestWallResult(WallSide.NORTH, dist, minX, maxX, minZ, maxZ, world);
+                }
+            }
+
+            // South (gracz za południową ścianą -> z > maxZ)
+            if (pz > maxZ) {
+                double dist = pz - maxZ;
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = new NearestWallResult(WallSide.SOUTH, dist, minX, maxX, minZ, maxZ, world);
+                }
+            }
+
+            // West (gracz na zachód -> x < minX)
+            if (px < minX) {
+                double dist = minX - px;
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = new NearestWallResult(WallSide.WEST, dist, minX, maxX, minZ, maxZ, world);
+                }
+            }
+
+            // East (gracz na wschód -> x > maxX)
+            if (px > maxX) {
+                double dist = px - maxX;
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = new NearestWallResult(WallSide.EAST, dist, minX, maxX, minZ, maxZ, world);
+                }
+            }
+        }
+
+        return best;
+    }
+
+    /**
+     * Rysuje ścianę na obwodzie regionu jako "odcinek" o długości width,
+     * centrum przy projekcji gracza na najbliższą ścianę.
+     * Przy rogach ściana zawija w L‑kę na kolejną ścianę.
+     */
+    private void showWallAlongPerimeter(Player player, Location playerLoc, NearestWallResult r) {
         removeWall(player);
 
-        WallData wallData = new WallData();
-        wallData.wallFixedCoord = wallFixedCoord;
-        wallData.lastCenterCoord = centerCoord;
-        wallData.wallAlongZ = wallAlongZ;
-        wallData.baseY = baseY;
+        Set<Location> wallBlocks = new HashSet<>();
+        Material material = plugin.getConfigManager().getWallMaterial();
 
-        int halfWidth = wallWidth / 2;
+        int minX = r.minX;
+        int maxX = r.maxX;
+        int minZ = r.minZ;
+        int maxZ = r.maxZ;
 
-        for (int h = 0; h < wallHeight; h++) {
-            for (int w = -halfWidth; w <= halfWidth; w++) {
+        // ilość bloków na bok
+        int nX = maxX - minX + 1; // szerokość regionu
+        int nZ = maxZ - minZ + 1; // długość regionu
 
-                if (isCornerToSkip(w, h, halfWidth, wallHeight)) {
+        // długości segmentów (liczba bloków)
+        int L1 = nX;       // North
+        int L2 = nZ;       // East
+        int L3 = nX;       // South
+        int L4 = nZ;       // West
+        int P  = L1 + L2 + L3 + L4; // pełny obwód w "krokach blokowych"
+
+        int width  = plugin.getConfigManager().getWallWidth();   // np. 12
+        int height = plugin.getConfigManager().getWallHeight();  // np. 12
+        int cornerSize = plugin.getConfigManager().getCornerSize();
+        int halfW = width / 2;
+        int halfH = height / 2;
+
+        int centerY = playerLoc.getBlockY();
+
+        // oblicz "pozycję na obwodzie" (t0) odpowiadającą rzutowi gracza na najbliższą ścianę
+        int px = playerLoc.getBlockX();
+        int pz = playerLoc.getBlockZ();
+        int t0; // baza na obwodzie
+
+        switch (r.side) {
+            case NORTH -> {
+                int projX = clamp(px, minX, maxX);
+                // North: od (minX,minZ) do (maxX,minZ)
+                t0 = (projX - minX); // [0..L1-1]
+            }
+            case EAST -> {
+                int projZ = clamp(pz, minZ, maxZ);
+                // East: po North, z rośnie
+                t0 = L1 + (projZ - minZ); // [L1..L1+L2-1]
+            }
+            case SOUTH -> {
+                int projX = clamp(px, minX, maxX);
+                // South: po North+East, x maleje
+                t0 = L1 + L2 + (maxX - projX); // [L1+L2..L1+L2+L3-1]
+            }
+            case WEST -> {
+                int projZ = clamp(pz, minZ, maxZ);
+                // West: po North+East+South, z maleje
+                t0 = L1 + L2 + L3 + (maxZ - projZ); // [..P-1]
+            }
+            default -> {
+                t0 = 0;
+            }
+        }
+
+        // dla każdego "pasa" w poziomie względem środka ściany
+        for (int dx = -halfW; dx <= halfW; dx++) {
+            int wIndex = dx + halfW; // 0..width-1
+
+            // pozycja na obwodzie (może wyjść poza zakres, więc zmodujemy)
+            int t = t0 + dx;
+
+            // normalizacja do [0, P)
+            int tNorm = ((t % P) + P) % P;
+
+            // odwzorowanie tNorm -> (x,z) na obwodzie regionu
+            int x, z;
+            if (tNorm < L1) {
+                // North
+                x = minX + tNorm;
+                z = minZ;
+            } else if (tNorm < L1 + L2) {
+                // East
+                int u = tNorm - L1;
+                x = maxX;
+                z = minZ + u;
+            } else if (tNorm < L1 + L2 + L3) {
+                // South
+                int u = tNorm - (L1 + L2);
+                x = maxX - u;
+                z = maxZ;
+            } else {
+                // West
+                int u = tNorm - (L1 + L2 + L3);
+                x = minX;
+                z = maxZ - u;
+            }
+
+            // dla każdego bloku w pionie względem gracza
+            for (int dy = -halfH; dy <= halfH; dy++) {
+                int hIndex = dy + halfH; // 0..height-1
+                if (!shouldRenderInRoundedRect(wIndex, hIndex, width, height, cornerSize)) {
                     continue;
                 }
 
-                Location blockLoc;
-                if (wallAlongZ) {
-                    blockLoc = new Location(
-                        player.getWorld(),
-                        wallFixedCoord,
-                        baseY + h,
-                        centerCoord + w
-                    );
-                } else {
-                    blockLoc = new Location(
-                        player.getWorld(),
-                        centerCoord + w,
-                        baseY + h,
-                        wallFixedCoord
-                    );
-                }
+                int y = centerY + dy;
+                Location blockLoc = new Location(r.world, x, y, z);
 
-                wallData.blocks.add(blockLoc);
-                player.sendBlockChange(blockLoc, Material.RED_STAINED_GLASS.createBlockData());
+                if (canPlaceWallBlock(blockLoc)) {
+                    wallBlocks.add(blockLoc);
+                    player.sendBlockChange(blockLoc, material.createBlockData());
+                }
             }
         }
 
-        playerWalls.put(player.getUniqueId(), wallData);
+        shownWalls.put(player.getUniqueId(), wallBlocks);
     }
 
-    private void shiftWall(Player player, WallData wallData, int movement,
-                           int newCenterCoord, int newBaseY) {
+    /**
+     * Zaokrąglone rogi w prostokącie width x height,
+     * cornerSize = promień "ścięcia" rogów w blokach.
+     */
+    private boolean shouldRenderInRoundedRect(int wIndex, int hIndex,
+                                              int width, int height, int cornerSize) {
+        if (cornerSize <= 0) return true;
 
-        int halfWidth = wallWidth / 2;
-        int oldCenter = wallData.lastCenterCoord;
+        int maxW = width  - 1;
+        int maxH = height - 1;
 
-        boolean yChanged = (newBaseY != wallData.baseY);
-
-        if (yChanged || Math.abs(movement) > halfWidth) {
-            createNewWall(player, wallData.wallFixedCoord, newCenterCoord,
-                         newBaseY, wallData.wallAlongZ);
-            return;
+        // lewy górny róg
+        if (wIndex < cornerSize && hIndex < cornerSize) {
+            int dx = cornerSize - 1 - wIndex;
+            int dy = cornerSize - 1 - hIndex;
+            return dx * dx + dy * dy <= cornerSize * cornerSize;
         }
 
-        Set<Location> newBlocks = new HashSet<>();
-        Set<Location> toRemove = new HashSet<>();
-        Set<Location> toAdd = new HashSet<>();
-
-        for (int h = 0; h < wallHeight; h++) {
-            for (int w = -halfWidth; w <= halfWidth; w++) {
-
-                if (isCornerToSkip(w, h, halfWidth, wallHeight)) {
-                    continue;
-                }
-
-                Location newLoc;
-
-                if (wallData.wallAlongZ) {
-                    newLoc = new Location(
-                        player.getWorld(),
-                        wallData.wallFixedCoord,
-                        wallData.baseY + h,
-                        newCenterCoord + w
-                    );
-                } else {
-                    newLoc = new Location(
-                        player.getWorld(),
-                        newCenterCoord + w,
-                        wallData.baseY + h,
-                        wallData.wallFixedCoord
-                    );
-                }
-
-                newBlocks.add(newLoc);
-            }
+        // prawy górny róg
+        if (wIndex > maxW - cornerSize && hIndex < cornerSize) {
+            int dx = wIndex - (maxW - cornerSize);
+            int dy = cornerSize - 1 - hIndex;
+            return dx * dx + dy * dy <= cornerSize * cornerSize;
         }
 
-        for (Location oldLoc : wallData.blocks) {
-            boolean found = false;
-            for (Location newLoc : newBlocks) {
-                if (isSameBlock(oldLoc, newLoc)) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                toRemove.add(oldLoc);
-            }
+        // lewy dolny róg
+        if (wIndex < cornerSize && hIndex > maxH - cornerSize) {
+            int dx = cornerSize - 1 - wIndex;
+            int dy = hIndex - (maxH - cornerSize);
+            return dx * dx + dy * dy <= cornerSize * cornerSize;
         }
 
-        for (Location newLoc : newBlocks) {
-            boolean found = false;
-            for (Location oldLoc : wallData.blocks) {
-                if (isSameBlock(oldLoc, newLoc)) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                toAdd.add(newLoc);
-            }
+        // prawy dolny róg
+        if (wIndex > maxW - cornerSize && hIndex > maxH - cornerSize) {
+            int dx = wIndex - (maxW - cornerSize);
+            int dy = hIndex - (maxH - cornerSize);
+            return dx * dx + dy * dy <= cornerSize * cornerSize;
         }
 
-        for (Location loc : toRemove) {
-            player.sendBlockChange(loc, loc.getBlock().getBlockData());
-        }
-
-        for (Location loc : toAdd) {
-            player.sendBlockChange(loc, Material.RED_STAINED_GLASS.createBlockData());
-        }
-
-        wallData.blocks = newBlocks;
-        wallData.lastCenterCoord = newCenterCoord;
+        return true;
     }
 
-    private boolean isSameBlock(Location loc1, Location loc2) {
-        return loc1.getBlockX() == loc2.getBlockX() &&
-               loc1.getBlockY() == loc2.getBlockY() &&
-               loc1.getBlockZ() == loc2.getBlockZ() &&
-               Objects.equals(loc1.getWorld(), loc2.getWorld());
+    private boolean canPlaceWallBlock(Location loc) {
+        Material type = loc.getBlock().getType();
+        return type.isAir()
+            || type == Material.WATER
+            || type == Material.LAVA
+            || type == Material.CAVE_AIR
+            || type == Material.VOID_AIR;
     }
 
-    private boolean isCornerToSkip(int w, int h, int halfWidth, int height) {
-        int absW = Math.abs(w);
-
-        if (h >= height - 2) {
-            if (h == height - 1 && absW >= halfWidth - 1) return true;
-            if (h == height - 2 && absW == halfWidth) return true;
-        }
-
-        if (h <= 1) {
-            if (h == 0 && absW >= halfWidth - 1) return true;
-            if (h == 1 && absW == halfWidth) return true;
-        }
-
-        return false;
+    private int clamp(int v, int min, int max) {
+        return Math.max(min, Math.min(max, v));
     }
 
     public void removeWall(Player player) {
-        if (player == null) return;
-
-        WallData wallData = playerWalls.remove(player.getUniqueId());
-
-        if (wallData != null && player.isOnline()) {
-            for (Location loc : wallData.blocks) {
+        Set<Location> walls = shownWalls.remove(player.getUniqueId());
+        if (walls != null && player.isOnline()) {
+            for (Location loc : walls) {
                 player.sendBlockChange(loc, loc.getBlock().getBlockData());
             }
         }
     }
 
     public void removeAllWalls() {
-        for (UUID uuid : new HashSet<>(playerWalls.keySet())) {
-            Player player = plugin.getServer().getPlayer(uuid);
-            if (player != null) {
-                removeWall(player);
+        for (UUID uuid : new HashSet<>(shownWalls.keySet())) {
+            Player p = plugin.getServer().getPlayer(uuid);
+            if (p != null && p.isOnline()) {
+                removeWall(p);
             }
         }
-        playerWalls.clear();
+        shownWalls.clear();
     }
 
-    public boolean hasWall(Player player) {
-        return playerWalls.containsKey(player.getUniqueId());
-    }
+    public boolean isInBlockedRegion(Location location) {
+        if (!plugin.isWorldGuardEnabled()) return false;
 
-    public boolean isLocationInWall(Player player, Location location) {
-        WallData data = playerWalls.get(player.getUniqueId());
-        if (data == null) return false;
+        RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
+        RegionManager regionManager = container.get(BukkitAdapter.adapt(location.getWorld()));
+        if (regionManager == null) return false;
 
-        for (Location wallBlock : data.blocks) {
-            if (isSameBlock(wallBlock, location)) {
+        List<String> blocked = plugin.getConfigManager().getBlockedRegions();
+        for (ProtectedRegion region : regionManager.getApplicableRegions(
+            BukkitAdapter.asBlockVector(location))) {
+            if (blocked.contains(region.getId())) {
                 return true;
             }
         }
         return false;
+    }
+
+    // Informacje o najbliższej ścianie i bounding boxie regionu
+    private static class NearestWallResult {
+        final WallSide side;
+        final double distance;
+        final int minX, maxX, minZ, maxZ;
+        final World world;
+
+        NearestWallResult(WallSide side, double distance,
+                          int minX, int maxX, int minZ, int maxZ,
+                          World world) {
+            this.side = side;
+            this.distance = distance;
+            this.minX = minX;
+            this.maxX = maxX;
+            this.minZ = minZ;
+            this.maxZ = maxZ;
+            this.world = world;
+        }
     }
 }
