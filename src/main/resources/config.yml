@@ -1,53 +1,54 @@
-# ANACODE X ANTYLOGOUT - Konfiguracja v1.1.0
+# ================================
+# ANACODE X ANTYLOGOUT
+# Konfiguracja pluginu
+# ================================
 
-settings:
-  combat-time: 30
-  kill-on-logout: true
-  ender-pearl-triggers-combat: true
-  region-wall-distance: 10
-  wall-width: 12
-  wall-height: 10
-  worldguard-protection: true
-  block-enderchest: true
+combat-time: 30
 
 messages:
-  prefix: "&8[&4ANACODE&8] &7"
-  actionbar: "&7Jestes podczas walki jeszcze &4%time_left%s"
-  command-blocked: "&7Jestes podczas walki nie mozesz teraz tego &4uzyc&7!"
-  combat-enter: "&7Wszedles w &4tryb walki&7!"
-  combat-leave: "&7Wyszedles z &atrybu walki&7!"
-  region-blocked: "&7Nie mozesz wejsc na ten &4region &7podczas walki!"
-  enderchest-blocked: "&7Nie mozesz otworzyc &4enderchesta &7podczas walki!"
-  
-  # Wiadomosci smierci
-  death-killed: "&7Gracz &f%killer% &7zabil &f%killed%&7."
-  death-combatlog: "&7Gracz &f%killed% &cwylogowal sie podczas &4walki&7!"
-  death-suicide: "&7Gracz &f%killed% &7popelnil &4samobojstwo&7!"
-  
-  # ActionBar dla zabojcy
-  kill-actionbar: "&7Zabiles gracza: &f%killed%&7!"
-  
-  # Statystyki
-  stats-header: "&8&m─────────&8[&4 Statystyki &8]&m─────────"
-  stats-player: "&7Gracz: &f%player%"
-  stats-kills: "&7Zabojstwa: &c%kills%"
-  stats-deaths: "&7Smierci: &c%deaths%"
-  stats-kdr: "&7K/D: &e%kdr%"
-  stats-footer: "&8&m──────────────────────────────"
+  actionbar: "&7Jesteś podczas walki jeszcze &4%time_left%"
+  command-blocked: "&7Jesteś podczas walki nie możesz teraz tego &4użyć&7!"
+  combat-start: "&cZostałeś oznaczony jako walczący!"
+  combat-end: "&aNie jesteś już w trybie walki!"
+  region-blocked: "&cNie możesz wejść na ten region podczas walki!"
+  void-combat: "&cSpadasz w otchłań! Antylogout aktywny!"
+  logout-death: "&c%player% &7wylogował się podczas walki i zginął!"
+  logout-death-killer: "&c%player% &7wylogował się podczas walki i został zabity przez &c%killer%&7!"
 
 allowed-commands:
   - "msg"
   - "r"
   - "reply"
   - "helpop"
-  - "report"
-  - "zglos"
 
 blocked-regions:
   - "spawn"
-  - "endspawn"
-  - "netherspawn"
+  - "safezone"
+  - "shop"
 
-disabled-worlds:
-  - "world_lobby"
-  - "world_hub"
+wall-distance: 10
+
+wall:
+  enabled: true
+  width: 12
+  height: 12
+  material: RED_STAINED_GLASS
+  corner-size: 2
+
+kill-on-logout: true
+
+void-combat:
+  enabled: true
+  worlds:
+    - "world_the_end"
+  below-y: -40
+  show-message: true
+
+last-damager:
+  enabled: true
+  memory-time: 60
+  give-kill-on-logout: true
+  broadcast-killer: true
+  give-rewards: false
+  reward-commands:
+    - "eco give %killer% 100"
