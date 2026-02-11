@@ -16,9 +16,6 @@ public class LastDamagerManager {
         this.plugin = plugin;
     }
 
-    /**
-     * Zapisuje ostatniego atakującego dla gracza
-     */
     public void setLastDamager(Player victim, Player attacker) {
         if (!plugin.getConfigManager().isLastDamagerEnabled()) return;
         if (victim.equals(attacker)) return;
@@ -29,9 +26,6 @@ public class LastDamagerManager {
         lastDamagers.put(victim.getUniqueId(), new DamagerInfo(attacker.getUniqueId(), expireTime));
     }
 
-    /**
-     * Pobiera UUID ostatniego atakującego (jeśli nie wygasł)
-     */
     public UUID getLastDamager(Player victim) {
         DamagerInfo info = lastDamagers.get(victim.getUniqueId());
         
@@ -45,16 +39,10 @@ public class LastDamagerManager {
         return info.damagerUUID;
     }
 
-    /**
-     * Usuwa informację o ostatnim atakującym
-     */
     public void clearLastDamager(Player victim) {
         lastDamagers.remove(victim.getUniqueId());
     }
 
-    /**
-     * Czyści wygasłe wpisy
-     */
     public void cleanupExpired() {
         long currentTime = System.currentTimeMillis();
         lastDamagers.entrySet().removeIf(entry -> currentTime > entry.getValue().expireTime);
