@@ -10,10 +10,12 @@ import pl.anacode.antylogout.task.*;
 public class AnacodeAntylogout extends JavaPlugin {
 
     private static AnacodeAntylogout instance;
-    private CombatManager combatManager;
     private ConfigManager configManager;
+    private CombatManager combatManager;
     private WallManager wallManager;
     private LastDamagerManager lastDamagerManager;
+    private RegionManager regionManager;
+    private StatsManager statsManager;
     private VoidCheckTask voidCheckTask;
     private boolean worldGuardEnabled = false;
 
@@ -23,18 +25,23 @@ public class AnacodeAntylogout extends JavaPlugin {
         
         saveDefaultConfig();
         
+        // Inicjalizacja managerów (kolejność ważna!)
         configManager = new ConfigManager(this);
         lastDamagerManager = new LastDamagerManager(this);
         combatManager = new CombatManager(this);
         wallManager = new WallManager(this);
+        statsManager = new StatsManager(this);
         
+        // Sprawdź WorldGuard
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null) {
             worldGuardEnabled = true;
+            regionManager = new RegionManager(this);
             getLogger().info("WorldGuard znaleziony! Integracja włączona.");
         } else {
             getLogger().warning("WorldGuard nie znaleziony! Funkcja regionów wyłączona.");
         }
         
+        // Rejestracja listenerów
         getServer().getPluginManager().registerEvents(new CombatListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
         getServer().getPluginManager().registerEvents(new CommandListener(this), this);
@@ -44,14 +51,17 @@ public class AnacodeAntylogout extends JavaPlugin {
             getServer().getPluginManager().registerEvents(new PearlListener(this), this);
         }
         
+        // Rejestracja komendy
         getCommand("antylogout").setExecutor(new AntylogoutCommand(this));
         
+        // Start tasków
         new ActionBarTask(this).runTaskTimer(this, 0L, 20L);
         
         if (worldGuardEnabled && configManager.isWallEnabled()) {
             new WallUpdateTask(this).runTaskTimer(this, 0L, 5L);
         }
         
+        // Void Check Task
         if (configManager.isVoidCombatEnabled()) {
             voidCheckTask = new VoidCheckTask(this);
             voidCheckTask.runTaskTimer(this, 0L, 10L);
@@ -77,6 +87,10 @@ public class AnacodeAntylogout extends JavaPlugin {
             wallManager.removeAllWalls();
         }
         
+        if (statsManager != null) {
+            statsManager.saveAllStats();
+        }
+        
         getLogger().info("ANACODE X ANTYLOGOUT został wyłączony!");
     }
 
@@ -84,12 +98,12 @@ public class AnacodeAntylogout extends JavaPlugin {
         return instance;
     }
 
-    public CombatManager getCombatManager() {
-        return combatManager;
-    }
-
     public ConfigManager getConfigManager() {
         return configManager;
+    }
+
+    public CombatManager getCombatManager() {
+        return combatManager;
     }
 
     public WallManager getWallManager() {
@@ -98,6 +112,14 @@ public class AnacodeAntylogout extends JavaPlugin {
 
     public LastDamagerManager getLastDamagerManager() {
         return lastDamagerManager;
+    }
+
+    public RegionManager getRegionManager() {
+        return regionManager;
+    }
+
+    public StatsManager getStatsManager() {
+        return statsManager;
     }
 
     public VoidCheckTask getVoidCheckTask() {
