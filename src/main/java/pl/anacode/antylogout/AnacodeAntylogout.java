@@ -2,104 +2,124 @@ package pl.anacode.antylogout;
 
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
+import pl.anacode.antylogout.api.AntylogoutAPI;
 import pl.anacode.antylogout.command.AntylogoutCommand;
-import pl.anacode.antylogout.listener.*;
-import pl.anacode.antylogout.manager.*;
-import pl.anacode.antylogout.task.*;
+import pl.anacode.antylogout.command.StatsCommand;
+import pl.anacode.antylogout.hook.PlaceholderHook;
+import pl.anacode.antylogout.listener.CombatListener;
+import pl.anacode.antylogout.listener.CommandListener;
+import pl.anacode.antylogout.listener.DeathListener;
+import pl.anacode.antylogout.listener.EnderchestListener;
+import pl.anacode.antylogout.listener.MoveListener;
+import pl.anacode.antylogout.listener.PearlListener;
+import pl.anacode.antylogout.listener.QuitListener;
+import pl.anacode.antylogout.manager.CombatManager;
+import pl.anacode.antylogout.manager.RegionManager;
+import pl.anacode.antylogout.manager.StatsManager;
+import pl.anacode.antylogout.manager.WallManager;
+import pl.anacode.antylogout.task.CombatTask;
 
 public class AnacodeAntylogout extends JavaPlugin {
 
     private static AnacodeAntylogout instance;
-    private ConfigManager configManager;
     private CombatManager combatManager;
     private WallManager wallManager;
-    private LastDamagerManager lastDamagerManager;
     private RegionManager regionManager;
     private StatsManager statsManager;
-    private VoidCheckTask voidCheckTask;
     private boolean worldGuardEnabled = false;
+    private boolean placeholderAPIEnabled = false;
 
     @Override
     public void onEnable() {
         instance = this;
-        
+
+        getLogger().info("");
+        getLogger().info("  ___   _   _   ___   ___  ___  ___  ___ ");
+        getLogger().info(" / _ \\ | \\ | | / _ \\ / __|/ _ \\|   \\| __|");
+        getLogger().info("| (_) ||  \\| || (_) | (__| (_) | |) | _| ");
+        getLogger().info(" \\___/ |_|\\__|\\___/ \\___|\\___/|___/|___|");
+        getLogger().info("         X ANTYLOGOUT v" + getDescription().getVersion());
+        getLogger().info("");
+
         saveDefaultConfig();
-        
-        // Inicjalizacja managerów (kolejność ważna!)
-        configManager = new ConfigManager(this);
-        lastDamagerManager = new LastDamagerManager(this);
-        combatManager = new CombatManager(this);
-        wallManager = new WallManager(this);
-        statsManager = new StatsManager(this);
-        
-        // Sprawdź WorldGuard
+
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null) {
             worldGuardEnabled = true;
-            regionManager = new RegionManager(this);
-            getLogger().info("WorldGuard znaleziony! Integracja włączona.");
+            getLogger().info("WorldGuard wykryty! Ochrona regionow wlaczona.");
         } else {
-            getLogger().warning("WorldGuard nie znaleziony! Funkcja regionów wyłączona.");
+            getLogger().warning("WorldGuard nie znaleziony! Ochrona regionow wylaczona.");
         }
-        
-        // Rejestracja listenerów
-        getServer().getPluginManager().registerEvents(new CombatListener(this), this);
-        getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
-        getServer().getPluginManager().registerEvents(new CommandListener(this), this);
-        
-        if (worldGuardEnabled) {
-            getServer().getPluginManager().registerEvents(new MoveListener(this), this);
-            getServer().getPluginManager().registerEvents(new PearlListener(this), this);
+
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            placeholderAPIEnabled = true;
+            new PlaceholderHook(this).register();
+            getLogger().info("PlaceholderAPI wykryty! Placeholdery wlaczone.");
+        } else {
+            getLogger().warning("PlaceholderAPI nie znaleziony! Placeholdery wylaczone.");
         }
-        
-        // Rejestracja komendy
+
+        statsManager = new StatsManager(this);
+        combatManager = new CombatManager(this);
+        wallManager = new WallManager(this);
+
+        if (worldGuardEnabled && getConfig().getBoolean("settings.worldguard-protection", true)) {
+            regionManager = new RegionManager(this);
+        }
+
+        // Inicjalizuj API
+        AntylogoutAPI.init(this);
+        getLogger().info("API zostalo zainicjalizowane!");
+
+        registerListeners();
+
+        new CombatTask(this).runTaskTimer(this, 0L, 20L);
+
         getCommand("antylogout").setExecutor(new AntylogoutCommand(this));
-        
-        // Start tasków
-        new ActionBarTask(this).runTaskTimer(this, 0L, 20L);
-        
-        if (worldGuardEnabled && configManager.isWallEnabled()) {
-            new WallUpdateTask(this).runTaskTimer(this, 0L, 5L);
-        }
-        
-        // Void Check Task
-        if (configManager.isVoidCombatEnabled()) {
-            voidCheckTask = new VoidCheckTask(this);
-            voidCheckTask.runTaskTimer(this, 0L, 10L);
-        }
-        
-        getLogger().info("========================================");
-        getLogger().info("  ANACODE X ANTYLOGOUT v" + getDescription().getVersion());
-        getLogger().info("  Plugin został pomyślnie włączony!");
-        getLogger().info("========================================");
+        getCommand("stats").setExecutor(new StatsCommand(this));
+
+        getLogger().info("Plugin zostal pomyslnie wlaczony!");
     }
 
     @Override
     public void onDisable() {
-        if (voidCheckTask != null) {
-            voidCheckTask.cancel();
-        }
-        
-        if (combatManager != null) {
-            combatManager.killAllInCombat();
-        }
-        
+        // Resetuj API
+        AntylogoutAPI.reset();
+
         if (wallManager != null) {
             wallManager.removeAllWalls();
         }
-        
+        if (combatManager != null) {
+            combatManager.clearAll();
+        }
         if (statsManager != null) {
             statsManager.saveAllStats();
         }
-        
-        getLogger().info("ANACODE X ANTYLOGOUT został wyłączony!");
+        getLogger().info("Plugin zostal wylaczony!");
+    }
+
+    private void registerListeners() {
+        Bukkit.getPluginManager().registerEvents(new CombatListener(this), this);
+        Bukkit.getPluginManager().registerEvents(new CommandListener(this), this);
+        Bukkit.getPluginManager().registerEvents(new QuitListener(this), this);
+        Bukkit.getPluginManager().registerEvents(new DeathListener(this), this);
+        Bukkit.getPluginManager().registerEvents(new EnderchestListener(this), this);
+        Bukkit.getPluginManager().registerEvents(new PearlListener(this), this);
+
+        if (worldGuardEnabled && getConfig().getBoolean("settings.worldguard-protection", true)) {
+            Bukkit.getPluginManager().registerEvents(new MoveListener(this), this);
+        }
+    }
+
+    /**
+     * Pobiera API pluginu
+     * @return instancja AntylogoutAPI
+     */
+    public static AntylogoutAPI getAPI() {
+        return AntylogoutAPI.getInstance();
     }
 
     public static AnacodeAntylogout getInstance() {
         return instance;
-    }
-
-    public ConfigManager getConfigManager() {
-        return configManager;
     }
 
     public CombatManager getCombatManager() {
@@ -110,10 +130,6 @@ public class AnacodeAntylogout extends JavaPlugin {
         return wallManager;
     }
 
-    public LastDamagerManager getLastDamagerManager() {
-        return lastDamagerManager;
-    }
-
     public RegionManager getRegionManager() {
         return regionManager;
     }
@@ -122,11 +138,11 @@ public class AnacodeAntylogout extends JavaPlugin {
         return statsManager;
     }
 
-    public VoidCheckTask getVoidCheckTask() {
-        return voidCheckTask;
-    }
-
     public boolean isWorldGuardEnabled() {
         return worldGuardEnabled;
+    }
+
+    public boolean isPlaceholderAPIEnabled() {
+        return placeholderAPIEnabled;
     }
 }
